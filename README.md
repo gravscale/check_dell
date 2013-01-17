@@ -16,6 +16,35 @@ Repositories can be found at:
 
 - Ubuntu/Debian: http://linux.dell.com/repo/community/deb/
 
+Installing on Ubuntu
+===========
+
+echo 'deb http://linux.dell.com/repo/community/deb/latest /' > /etc/apt/sources.list.d/linux.dell.com.sources.list
+
+apt-get update
+
+apt-get install srvadmin-all git
+
+ln -s /opt/dell/srvadmin/bin/omreport /usr/sbin/omreport
+
+cd /opt
+
+git clone https://github.com/Desenvolve/check_dell.git
+
+install -m 0755 /opt/check_dell/check_dell /usr/sbin
+
+# testing
+
+check_dell -s 
+
+check_dell -c all
+
+# testing error counters
+
+check_dell -s -n
+
+check_dell -c all -n
+
 
 
 Zabbix Usage

@@ -56,3 +56,9 @@ UserParameter=dell.storage,check_dell -s -n
 
 UserParameter=dell.chassis,check_dell -c all -n
 
+
+Credits 
+==========
+Parser script was write by Ryan Bowlby and published at http://ryanbowlby.com/2009/12/27/omreport-nagios-check_dell/
+
+

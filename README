@@ -1,3 +1,0 @@
-check_dell
-
-A custom Nagios plugin to check dell hardware. Open Manage must be installed (omreport).

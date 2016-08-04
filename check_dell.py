@@ -43,13 +43,11 @@ LICENSE
     This script is in the public domain, free from copyrights or restrictions.
 """
 
-
-PRINT_NUM_ERRORS_ONLY=True
-
-
-import optparse
+from __future__ import print_function
+import argparse
 import subprocess
 import sys
+
 
 def check_storage(count_errors=False):
     """ Checks Dell storage components (pdisk, vdisk, cntrl battery).
@@ -71,9 +69,9 @@ def check_storage(count_errors=False):
 
     # check pdisks, vdisks, cntrl battery for each controller
     for controller in controllers:
-        vfilter = ["Status","Name","State"]
-        pfilter = ["Status","Name","State","FailurePredicted"]
-        bfilter = ["Status","Name","State"]
+        vfilter = ["Status", "Name", "State"]
+        pfilter = ["Status", "Name", "State", "FailurePredicted"]
+        bfilter = ["Status", "Name", "State"]
         vdisk = parse_om("storage vdisk controller=" + controller, vfilter)
         pdisk = parse_om("storage pdisk controller=" + controller, pfilter)
         battery = parse_om("storage battery controller=" + controller, bfilter)
@@ -81,13 +79,14 @@ def check_storage(count_errors=False):
 
         if count_errors:
             # parse and sum results
-            errors = errors + disp_results(components, count_errors=count_errors)
+            errors = errors + disp_results(
+                components, count_errors=count_errors)
         else:
             # just display results
             disp_results(components)
 
     if count_errors:
-        print errors
+        print(errors)
 
 
 def check_chassis(args, count_errors=False):
@@ -98,28 +97,18 @@ def check_chassis(args, count_errors=False):
     to bo passed to disp_results().
     """
 
-    components = ('fans',
-                  'intrusion',
-                  'memory',
-                  'powersupplies',
-                  'processors',
-                  'temperatures',
-                  'voltages',
-                  'hardwarelog',
-                  'batteries')
+    components = ('fans', 'intrusion', 'memory', 'powersupplies', 'processors',
+                  'temperatures', 'voltages', 'hardwarelog', 'batteries')
 
-    for arg in args:
+    for arg in args.check_type:
         if arg.lower() == "all":
             args = ""
-        elif arg.lower() not in components:
-            print >> sys.stderr, '\nError: invalid chassis argument: %s' % arg
-            sys.exit(1)
-  
-    # Returns dictionary in form: component:status.
-    chas = parse_om("chassis",args)[0]
+
+# Returns dictionary in form: component:status.
+    chas = parse_om("chassis", args)[0]
 
     if count_errors:
-        print disp_results(chas, chassis="True", count_errors=count_errors)
+        print(disp_results(chas, chassis="True", count_errors=count_errors))
     else:
         disp_results(chas, chassis="True")
 
@@ -131,16 +120,22 @@ def parse_om(suffix, filters=""):
     lines not matching optional param "filters". Attempts to provide useful
     error output in instances where OMSA fails us.
     """
- 
+
     filters = [x.lower() for x in filters]
-    cmd = ["/usr/sbin/omreport"] + suffix.split()
+    cmd = which('omreport')
+    if cmd == None:
+        print("Error: omreport not found in PATH", file=sys.stderr)
+        sys.exit(1)
+    cmd = [cmd] + suffix.split()
     try:
         data = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
-    except OSError, e:
-        print >> sys.stderr, "Error running '%s', %s" % (" ".join(cmd), e)
+    except OSError as e:
+        print(
+            "Error running '{0}', {1}".format(" ".join(cmd), e),
+            file=sys.stderr)
         sys.exit(1)
 
-    data = data.replace(' ','').splitlines()
+    data = data.replace(' ', '').splitlines()
     result = [{}]
     for item in data:
         # Filter out useless items such as titles, blank lines.
@@ -160,8 +155,11 @@ def parse_om(suffix, filters=""):
 
     # Sometimes omreport returns zero output if omsa services aren't started.
     if not result[0]:
-        print >> sys.stderr, 'Error: "omreport %s" returned 0 output.' % suffix
-        print >> sys.stderr, 'Is OMSA running? "srvadmin-services.sh status".'
+        print(
+            'Error: "omreport {0}" returned 0 output.'.format(suffix),
+            file=sys.stderr)
+        print(
+            'Is OMSA running? "srvadmin-services.sh status".', file=sys.stderr)
         sys.exit(1)
 
     return result
@@ -178,7 +176,7 @@ def disp_results(components, chassis="", count_errors=False):
     Controller batteries in state "charging" are ignored as they clutter the
     Nagios status screen.
     """
-    
+
     succ = []
     warn = []
     crit = []
@@ -205,8 +203,9 @@ def disp_results(components, chassis="", count_errors=False):
             else:
                 # Skip when controller battery is in state charging.
                 if value['Name'].startswith("Battery"):
-                   if value['State'] == "Charging" or value['State'] == "Learning":
-                       continue 
+                    if value['State'] == "Charging" or value[
+                            'State'] == "Learning":
+                        continue
                 msg = "%s in state: '%s'" % (value['Name'], value['State'])
                 if value.get('FailurePredicted') == 'Yes':
                     msg += ", Failure Predicted"
@@ -215,78 +214,84 @@ def disp_results(components, chassis="", count_errors=False):
     if count_errors == True:
         return len(warn) + len(crit)
     else:
-        countSuffix = " - [%s:Success, %s:Warning, %s:Critical]" %\
+        countPrefix = "[%s:Success, %s:Warning, %s:Critical] - " %\
                       (len(succ), len(warn), len(crit))
         if crit:
-            print ", ".join(crit) + ", ".join(warn) + countSuffix
+            print(countPrefix + ", ".join(crit) + ", ".join(warn))
             sys.exit(2)
         elif warn:
-            print ", ".join(warn) + countSuffix
+            print(countPrefix + ", ".join(warn))
             sys.exit(1)
         else:
-            print ", ".join(succ) + countSuffix
+            print(countPrefix + ", ".join(succ))
+
+
+def which(program):
+    import os
+
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
 
 
 def main():
-    """ Handles optparse usage and calls approriate check function."""
+    """ Handles argparse usage and calls approriate check function."""
 
-    parser = optparse.OptionParser(description=\
+    parser = argparse.ArgumentParser(description=\
                 "This Nagios plugin checks the health of Dell hardware. "
                 "Plugin requires omreport, part of Dell's OMSA package.")
 
-    # optparse wraps newlines and no option to override exists. As a hack
-    # I inject spaces to move each example to its own line. I could
-    # subclass optparse.epilog and override wrapping, but epilog only
-    # exists in python versions 2.4.? and above.
-    examples = optparse.OptionGroup(parser, "Examples",
-                                  "check_dell -s                    "
-                                  "                                 "
-                                  "check_dell -c fans memory voltages"
-                                  "                                 "
-                                  "check_dell -c all                ")
+    parser.add_argument(
+        '-s',
+        '--storage',
+        action='store_true',
+        default=False,
+        help='check virtual and physical disks')
+    parser.add_argument(
+        '-c',
+        '--chassis',
+        action='store_true',
+        default=False,
+        help='check specified chassis components')
+    parser.add_argument(
+        'check_type',
+        type=str,
+        nargs='*',
+        choices=['all', 'fans', 'intrusion', 'memory', 'powersupplies',
+                 'processors', 'temperatures', 'voltages', 'hardwarelog',
+                 'batteries'],
+        default='all')
+    parser.add_argument(
+        '-n',
+        dest='count_errors',
+        action='store_true',
+        default=False,
+        help='return number of errors (0 = no error)')
 
+    args = parser.parse_args()
 
-    arguments = optparse.OptionGroup(parser, "Valid chassis args",
-                                     "all fans intrusion memory "
-                                     "powersupplies processors "
-                                     "temperatures voltages "
-                                     "hardwarelog batteries")
-
-    parser.add_option_group(examples)
-    parser.add_option_group(arguments)
-    parser.add_option('-s',
-                      '--storage',
-                      action='store_true',
-                      default=False,
-                      help='check virtual and physical disks')
-    parser.add_option('-c',
-                      '--chassis',
-                      action='store_true',
-                      default=False,
-                      help='check specified chassis components')
-    parser.add_option('-n',
-                      dest='count_errors',
-                      action='store_true',
-                      help='return number of errors (0 = no error)')
-                        
-
-
-    (opts, args) = parser.parse_args()
-    if not opts.chassis and not opts.storage:
+    if not args.chassis and not args.storage:
         parser.print_help()
-    elif opts.chassis and len(args) < 1:
+    elif args.chassis and len(args.check_type) > 1:
         parser.error('--chassis takes one or more arguments')
-    # If the checks are run together the output will be two lines.
 
-    if not opts.count_errors:
-        count_errors = False
-    else:
-        count_errors = True
+    if args.storage:
+        check_storage(count_errors=args.count_errors)
+    if args.chassis:
+        check_chassis(args, count_errors=args.count_errors)
 
-    if opts.storage:
-        check_storage(count_errors=count_errors)
-    if opts.chassis:
-        check_chassis(args, count_errors=count_errors)
 
 if __name__ == '__main__':
     main()
